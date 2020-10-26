@@ -141,7 +141,6 @@ def get_dates(sheet: xlrd.sheet, today: datetime):
 
 if __name__ == "__main__":
     download_xls()
-    day = get_dates(open_xls(), datetime.datetime.strptime('27'
-                                                           '.10.2020' ,'%d.%m.%Y').date())
+    day = get_dates(open_xls(), datetime.datetime.strptime('27.10.2020' ,'%d.%m.%Y').date())
     lessons = get_information(sheet=open_xls(), day_raw=day, colx=5)
     print(f'Дата: {lessons.day}' + "\n\n" + lessons.text())
