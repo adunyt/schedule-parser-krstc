@@ -24,6 +24,7 @@ distant_time_of_lessons = ["09:00-09:30 09:40-10:10",
                            "17:30-18:00 18:10-18:40",
                            "20.20-21.50"]
 
+
 def download():
     start_time = time.time()
     print('INFO: Начало скачивания файла')
@@ -78,58 +79,30 @@ def importCSV():
 
 def correct_a_table(table):
     start_time = time.time()
-    for score, lesson in enumerate(table['lessons']):
-        if not lesson:
-            print(f"WARNING: урок {score+1} не определен! Исправление...")
-            items = table['cabinets'][score+1].split('\n')
-            for item in items:
-                if re.match(r'^\s*[А-Я][а-я]+\s[а-я]+\s*|^\s*[А-Я][а-я]+\s*|^\s*[А-Я]+\s*', item):
-                    table['lessons'][score+1] = item
-                    print(f'INFO: урок {score + 1} исправлен! Предмет: {item}')
-                elif re.match(r'/s*|[а-я]+|/d+', item):
-                    table['cabinets'][score+1] = item
-                    print(f'INFO: кабинет урока {score + 1} исправлен. Кабинет: {item}')
-                else:
-                    print('WARNING: неожиданное поведение при исправление столбца lessons')
-        elif isinstance(lesson, list):
-            if len(lesson) == 1:
-                lesson = re.findall(r'^\s*[А-Я][а-я]+\s[а-я]+|^\s*[А-Я][а-я]+|^\s*[А-Я]+', lesson[0])
-                table['lessons'][score+1] = lesson[0]
-            elif len(lesson) != 1:
-                raise Exception('WARNING: в уроке не должно быть больше одного list!')
-            else:
-                raise Exception
+    for score, cabinet in enumerate(table['cabinets']):
+        if not isinstance(cabinet, float):
+            pattern_teacher = r'\w+ \w\.\w\.'
+            teacher = re.findall(pattern_teacher, cabinet)
+            cabinet = re.sub(pattern_teacher, '', cabinet)
 
-    for score, teacher in enumerate(table['teachers']):
-        if not teacher:
-            print(f"WARNING: учитель на уроке {score + 1} не определен! Исправление...")
-            items = table['cabinets'][score + 1].split('\n')
-            for item in items:
-                if re.match(r'\w+ \w\.\w\.', item):
-                    table['teachers'][score + 1] = item
-                    print(f'INFO: учитель на уроке {score + 1} исправлен! Учитель: {item}')
-                elif re.match(r'/s*|[а-я]+|/d+', item):
-                    table['cabinets'][score + 1] = item
-                    print(f'INFO: кабинет урока {score + 1} исправлен. Кабинет: {item}')
-                else:
-                    print('WARNING: неожиданное поведение при исправление столбца teachers')
+            pattern_lesson = r'\s*[А-Я][а-я]+\s[а-я]+\s*|\s*[А-Я][а-я]+\s*\n|\s*[А-Я]+\s*'
+            lesson = re.findall(pattern_lesson, cabinet)
+            cabinet = re.sub(pattern_lesson, '', cabinet)
 
-        elif isinstance(teacher, list):
-            if len(teacher) == 1:
-                table['teachers'][score+1] = teacher[0]
-            elif len(teacher) != 1:
-                raise Exception('WARNING: в учителе на уроке не должно быть больше одного list!')
-            else:
-                raise Exception
 
-    for score, id_zoom in enumerate(table['ids']):
-        if isinstance(id_zoom, list):
-            table['ids'][score+1] = id_zoom[0][4:]
-
-    for score, password in enumerate(table['passwords']):
-        if isinstance(password, list):
-            items = password[0].split()
-            table['passwords'][score+1] = ' '.join(items[1:])
+            table['cabinets'][score+1] = cabinet
+            if lesson:
+                table['lessons'][score + 1] = lesson
+            if teacher:
+                table['teachers'][score + 1] = teacher
+    # for score, id_zoom in enumerate(table['ids']):
+    #     if isinstance(id_zoom, list):
+    #         table['ids'][score+1] = id_zoom[0][4:]
+    #
+    # for score, password in enumerate(table['passwords']):
+    #     if isinstance(password, list):
+    #         items = password[0].split()
+    #         table['passwords'][score+1] = ' '.join(items[1:])
     print(f"Затраченное время на корректировку таблицы: {time.time() - start_time}")
     return table
 
@@ -137,7 +110,7 @@ def correct_a_table(table):
 def extract_data(day = str(datetime.datetime.now().date())):
     tablesMain = importCSV()
     start_time = time.time()
-    group = 1
+    group = 0
     days = {
         '1': [[0, 4, 12]],
         '2': [[0, 14, 19], [1, 0, 3]],
@@ -162,20 +135,21 @@ def extract_data(day = str(datetime.datetime.now().date())):
     time_lesson = pandas.Series(distant_time_of_lessons)
     lesson = series.str.findall(r'^\s*[А-Я][а-я]+\s[а-я]+\s*\n|^\s*[А-Я][а-я]+\s*\n|^\s*[А-Я]+\s*\n')
     teachers = series.str.findall(r'\w+ \w\.\w\.')
-    ids = series.str.findall(r'ИК.+')
-    passwords = series.str.findall(r'Пароль.+|Код.+')
+    ids = series.str.findall(r"""ИК:\s*
+.+|ИК:\s*.+""")
+    passwords = series.str.findall(r'Пароль\n?.+|Код\n?.+')
     table = pandas.concat(objs=[time_lesson, lesson, cabinets, teachers, ids, passwords],
                           axis=1,
                           ignore_index=True)
     table.index = [i for i in range(1, len(table)+1)]
     table.columns = ["time", "lessons", "cabinets", "teachers", "ids", "passwords"]
     print(f"Затраченное время на обработку таблицы из csv: {time.time() - start_time}")
+    table2 = table.copy()
     correct_a_table(table)
-    return table
+    return table, table2
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    result = extract_data('2')  # TODO: Починить парсер для очного расписания и для других групп
-    print(result)
+    result1, result2 = extract_data('2')  # TODO: Починить парсер для ИК и очного рассписания
     print(f"Общее затраченное время: {time.time() - start_time}")
