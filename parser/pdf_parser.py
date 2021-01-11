@@ -5,6 +5,10 @@ import os
 import pandas
 import re
 import time
+import warnings
+
+
+warnings.filterwarnings("ignore")
 
 time_of_lessons = ['08:30-10:00',
                    '10:10-11:40',
@@ -72,84 +76,167 @@ def importCSV():
                 os.remove(f'temp/{name}')
                 print(f'INFO: файл temp/{name} успешно удален!')
         convertToCSV()
-        importCSV()
+        tables = importCSV()
     print(f"Затраченное время на извлечение таблицы из csv в pandas: {time.time() - start_time}")
     return tables
 
 
-def correct_a_table(table):
+def correct_a_table(table, distant):
     start_time = time.time()
+
     for score, cabinet in enumerate(table['cabinets']):
         if not isinstance(cabinet, float):
             pattern_teacher = r'\w+ \w\.\w\.'
             teacher = re.findall(pattern_teacher, cabinet)
             cabinet = re.sub(pattern_teacher, '', cabinet)
 
-            pattern_lesson = r'\s*[А-Я][а-я]+\s[а-я]+\s*|\s*[А-Я][а-я]+\s*\n|\s*[А-Я]+\s*'
+            pattern_lesson = r'\s*[А-Я][а-я]+\s[а-я]+\s*[а-я]*\s*|\s*[А-Я][а-я]+\s*\n|\s*[А-Я]+\s*'
             lesson = re.findall(pattern_lesson, cabinet)
+
             cabinet = re.sub(pattern_lesson, '', cabinet)
 
+            cabinet = re.sub('\n', '', cabinet)
 
             table['cabinets'][score+1] = cabinet
             if lesson:
                 table['lessons'][score + 1] = lesson
             if teacher:
-                table['teachers'][score + 1] = teacher
-    # for score, id_zoom in enumerate(table['ids']):
-    #     if isinstance(id_zoom, list):
-    #         table['ids'][score+1] = id_zoom[0][4:]
-    #
-    # for score, password in enumerate(table['passwords']):
-    #     if isinstance(password, list):
-    #         items = password[0].split()
-    #         table['passwords'][score+1] = ' '.join(items[1:])
+                if len(table['teachers'][score + 1]) == 1:
+                    table['teachers'][score + 1].append(teacher[0])
+                elif len(table['teachers'][score + 1]) == 0:
+                    table['teachers'][score + 1] = teacher
+
+    if distant:
+        for name in ('ids', 'passwords'):
+            for score, item in enumerate(table[name]):
+                if isinstance(item, list) and item:
+                    if len(item) == 1:
+                        items = item[0].split()
+                        raw_item = ' '.join(items[1:])
+                        corrected_raw_item = re.sub('-', ' ', raw_item)
+                        table[name][score+1] = corrected_raw_item
+                    elif len(item) == 2:
+                        for name_item in item:
+                            splited_name_item = name_item.split()
+                            corrected_item = ' '.join(splited_name_item[1:])
+                            corrected_item = re.sub('/', '', corrected_item)
+                            table[name][score + 1].remove(name_item)
+                            table[name][score + 1].append(corrected_item)
+                            table[name][score + 1].reverse()
+
+    for name in ('lessons', 'teachers'):
+        for score, item in enumerate(table[name]):
+            if isinstance(item, list) and item:
+                for i in range(0, len(item)):
+                    if len(item) == 1:
+                        item[0] = re.sub(r'\s{2,}', '', item[0])
+                        table[name][score + 1] = re.sub('\\n', '', item[0])
+                    elif len(item) == 2:
+                        for name_item in item:
+                            corrected_item = re.sub('\n', '', name_item)
+                            corrected_item = re.sub(r'\s{2,}', '', corrected_item)
+                            table[name][score + 1].remove(name_item)
+                            table[name][score + 1].append(corrected_item)
+                            table[name][score + 1].reverse()
+
+    for score, lesson in enumerate(table['lessons']):
+        cabinet = table['cabinets'][score + 1]
+        teacher = table['teachers'][score + 1]
+        if distant:
+            zoom_id = table['ids'][score + 1]
+            password = table['passwords'][score + 1]
+        if pandas.isnull(lesson):
+            if pandas.notnull(cabinet):
+                table['lessons'][score + 1] = past_lesson
+                table['teachers'][score + 1] = past_teacher
+                if distant:
+                    table['ids'][score + 1] = past_id
+                    table['passwords'][score + 1] = past_password
+        else:
+            past_lesson = lesson
+            past_teacher = teacher
+            if distant:
+                past_id = zoom_id
+                past_password = password
+
     print(f"Затраченное время на корректировку таблицы: {time.time() - start_time}")
-    return table
+
+
+def is_distant(raw_tables, day, group):
+    days = {
+        '1': [0, 3],
+        '2': [0, 13],
+        '3': [1, 4],
+        '4': [1, 15],
+        '5': [2, 8]
+    }
+    day_axis = days[day]
+    place = raw_tables[day_axis[0]][3 + 2 * group][day_axis[1]]
+    if place == 'дистант':
+        return True
+    elif place != 'дистант':
+        return False
 
 
 def extract_data(day = str(datetime.datetime.now().date())):
-    tablesMain = importCSV()
-    start_time = time.time()
-    group = 0
+    main_tables = importCSV()
+    group = 1
     days = {
         '1': [[0, 4, 12]],
         '2': [[0, 14, 19], [1, 0, 3]],
         '3': [[1, 5, 13]],
-        '4': [[1, 16, 16],[2, 0, 7]],
+        '4': [[1, 16, 16], [2, 0, 7]],
         '5': [[2, 9, 17]]
     }
     if len(days[day]) == 2:
         day_axis1 = days[day][0]
         day_axis2 = days[day][1]
-        s1 = tablesMain[day_axis1[0]][3 + 2 * group][day_axis1[1]:day_axis1[2]]
-        s2 = tablesMain[day_axis2[0]][3 + 2 * group][day_axis2[1]:day_axis2[2]]
-        cab1 = tablesMain[day_axis1[0]][4 + 2 * group][day_axis1[1]:day_axis1[2]]
-        cab2 = tablesMain[day_axis2[0]][4 + 2 * group][day_axis2[1]:day_axis2[2]]
+        s1 = main_tables[day_axis1[0]][3 + 2 * group][day_axis1[1]:day_axis1[2]]
+        s2 = main_tables[day_axis2[0]][3 + 2 * group][day_axis2[1]:day_axis2[2]]
+        cab1 = main_tables[day_axis1[0]][4 + 2 * group][day_axis1[1]:day_axis1[2]]
+        cab2 = main_tables[day_axis2[0]][4 + 2 * group][day_axis2[1]:day_axis2[2]]
         series = pandas.concat([s1, s2], ignore_index=True)
         cabinets = pandas.concat([cab1, cab2], ignore_index=True)
     else:
         day_axis = days[day][0]
-        series = tablesMain[day_axis[0]][3 + 2 * group][day_axis[1]:day_axis[2]]
-        cabinets = tablesMain[day_axis[0]][4 + 2 * group][day_axis[1]:day_axis[2]]
+        series = main_tables[day_axis[0]][3 + 2 * group][day_axis[1]:day_axis[2]]
+        cabinets = main_tables[day_axis[0]][4 + 2 * group][day_axis[1]:day_axis[2]]
 
-    time_lesson = pandas.Series(distant_time_of_lessons)
-    lesson = series.str.findall(r'^\s*[А-Я][а-я]+\s[а-я]+\s*\n|^\s*[А-Я][а-я]+\s*\n|^\s*[А-Я]+\s*\n')
-    teachers = series.str.findall(r'\w+ \w\.\w\.')
-    ids = series.str.findall(r"""ИК:\s*
-.+|ИК:\s*.+""")
-    passwords = series.str.findall(r'Пароль\n?.+|Код\n?.+')
-    table = pandas.concat(objs=[time_lesson, lesson, cabinets, teachers, ids, passwords],
-                          axis=1,
-                          ignore_index=True)
-    table.index = [i for i in range(1, len(table)+1)]
-    table.columns = ["time", "lessons", "cabinets", "teachers", "ids", "passwords"]
+    series.index = cabinets.index = [i for i in range(1, len(series) + 1)]
+    teachers = series.str.findall(r'\n*\w+\s*\n?\w\.\w\.')
+    series.str.replace(r'\w+ \w\.\w\.', '')
+    lesson = series.str.findall(r'^\s*[А-Я][а-я]+\s[а-я]+\s*|^\s*[А-Я][а-я]+\s*|^\s*[А-Я]+\s*')
+    series.str.replace(r'^\s*[А-Я][а-я]+\s[а-я]+\s*|^\s*[А-Я][а-я]+\s*\n|^\s*[А-Я]+\s*', '')
+    distant = is_distant(main_tables, day, group)
+    if distant:
+        time_lesson = pandas.Series(distant_time_of_lessons,
+                                    index=[i for i in range(1, len(distant_time_of_lessons) + 1)])
+        ids = series.str.findall(r"ИК\:*\s*[\d*\s*|\d*\-]*")
+        series.str.replace(r"ИК\:*\s*[\d*\s*|\d*\-]*", '')
+        passwords = series.str.findall(r'Пароль\n?.+|Код\n?.+')
+        series.str.replace(r'Пароль\n?.+|Код\n?.+', '')
+        table = pandas.concat(objs=[time_lesson, lesson, cabinets, teachers, ids, passwords],
+                              axis=1,
+                              ignore_index=True)
+        table.index = [i for i in range(1, len(table) + 1)]
+        table.columns = ["time", "lessons", "cabinets", "teachers", "ids", "passwords"]
+    elif not distant:
+        time_lesson = pandas.Series(time_of_lessons,
+                                    index=[i for i in range(1, len(distant_time_of_lessons) + 1)])
+        table = pandas.concat(objs=[time_lesson, lesson, cabinets, teachers],
+                              axis=1,
+                              ignore_index=True)
+        table.index = [i for i in range(1, len(table) + 1)]
+        table.columns = ["time", "lessons", "cabinets", "teachers"]
     print(f"Затраченное время на обработку таблицы из csv: {time.time() - start_time}")
-    table2 = table.copy()
-    correct_a_table(table)
-    return table, table2
+    correct_a_table(table, distant)
+    return table
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    result1, result2 = extract_data('2')  # TODO: Починить парсер для ИК и очного рассписания
+    day = input('Введите на какой день вам нужно рассписание в виде цифры (понедельник - 1, вторник - 2, и тд.) >> ')
+    result = extract_data(day)
+    pandas.set_option('display.max_columns', None)
+    print(result)
     print(f"Общее затраченное время: {time.time() - start_time}")
