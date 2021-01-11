@@ -30,7 +30,6 @@ distant_time_of_lessons = ["09:00-09:30 09:40-10:10",
 
 
 def download():
-    start_time = time.time()
     print('INFO: Начало скачивания файла')
     url = "http://next.krstc.ru:8081/index.php/s/C2FEBCzoT8xECei/download?path=%2F&files=%D0%A1%D0%90%2C%20%D0%98%D0%A1%2C%D0%9E.pdf"
     r = requests.get(url)
@@ -39,12 +38,10 @@ def download():
         file.write(r.content)
         file.close()
     print('INFO: файл успешно записан')
-    print(f"Затраченное время на скачивание и запись PDF: {time.time() - start_time}")
 
 
 def convertToCSV():
     download()
-    start_time = time.time()
     pdf = camelot.read_pdf('temp/temp.pdf', pages='all')
     tables = []
     for i in range(0, len(pdf)):
@@ -53,11 +50,9 @@ def convertToCSV():
     name = str( datetime.datetime.now().date() ) + '.csv'
     pdf.export(path=f'temp/{name}', f='csv')
     os.remove('temp/temp.pdf')
-    print(f"Затраченное время на извлечение таблицы из PDF: {time.time() - start_time}")
 
 
 def importCSV():
-    start_time = time.time()
     today = datetime.datetime.now().date()
     yesterday = datetime.datetime.now().date() - datetime.timedelta(days=1)
     tables = []
@@ -77,12 +72,10 @@ def importCSV():
                 print(f'INFO: файл temp/{name} успешно удален!')
         convertToCSV()
         tables = importCSV()
-    print(f"Затраченное время на извлечение таблицы из csv в pandas: {time.time() - start_time}")
     return tables
 
 
 def correct_a_table(table, distant):
-    start_time = time.time()
 
     for score, cabinet in enumerate(table['cabinets']):
         if not isinstance(cabinet, float):
@@ -159,8 +152,6 @@ def correct_a_table(table, distant):
                 past_id = zoom_id
                 past_password = password
 
-    print(f"Затраченное время на корректировку таблицы: {time.time() - start_time}")
-
 
 def is_distant(raw_tables, day, group):
     days = {
@@ -178,7 +169,7 @@ def is_distant(raw_tables, day, group):
         return False
 
 
-def extract_data(day = str(datetime.datetime.now().date())):
+def extract_data(day=str(datetime.datetime.now().date())):
     main_tables = importCSV()
     group = 1
     days = {
@@ -228,15 +219,12 @@ def extract_data(day = str(datetime.datetime.now().date())):
                               ignore_index=True)
         table.index = [i for i in range(1, len(table) + 1)]
         table.columns = ["time", "lessons", "cabinets", "teachers"]
-    print(f"Затраченное время на обработку таблицы из csv: {time.time() - start_time}")
     correct_a_table(table, distant)
     return table
 
 
 if __name__ == '__main__':
-    start_time = time.time()
     day = input('Введите на какой день вам нужно рассписание в виде цифры (понедельник - 1, вторник - 2, и тд.) >> ')
     result = extract_data(day)
     pandas.set_option('display.max_columns', None)
     print(result)
-    print(f"Общее затраченное время: {time.time() - start_time}")
