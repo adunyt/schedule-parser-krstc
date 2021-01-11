@@ -4,9 +4,7 @@ import requests
 import os
 import pandas
 import re
-import time
 import warnings
-
 
 warnings.filterwarnings("ignore")
 

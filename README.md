@@ -1,6 +1,13 @@
 # Парсер расписания Красногорского колледжа
 
-Зависимости:
-* camelot
-* requests
-* cv2-utils (для camelot)
+###Используемые библиотеки:
+* Стандартные:
+    * datetime
+    * os
+    * re
+    * warnings
+* Другие:
+    * camelot
+    * requests
+    * cv2-utils (зависимость для camelot)
+    * pandas
