@@ -14,7 +14,7 @@ In short, this code parse the PDF file with schedule of lessons, and it is conve
 * Другие:
     * camelot
     * requests
-    * cv2-utils (зависимость для camelot)
+    * cv2-extras (зависимость для camelot)
     * pandas
 
 ### Как использовать:
