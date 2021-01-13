@@ -40,6 +40,7 @@ def download():
 
 def convertToCSV():
     download()
+
     pdf = camelot.read_pdf('temp/temp.pdf', pages='all')
     tables = []
     for i in range(0, len(pdf)):
@@ -161,22 +162,28 @@ def is_distant(raw_tables, day, group):
     }
     day_axis = days[day]
     place = raw_tables[day_axis[0]][3 + 2 * group][day_axis[1]]
-    if place == 'дистант':
+    if place == 'Дистант':
         return True
-    elif place != 'дистант':
+    elif place != 'Дистант':
         return False
 
 
-def extract_data(day=str(datetime.datetime.now().date())):
+def extract_data(day=str(datetime.datetime.now().date())) -> pandas.DataFrame:
     main_tables = importCSV()
     group = 1
-    days = {
-        '1': [[0, 4, 12]],
-        '2': [[0, 14, 19], [1, 0, 3]],
-        '3': [[1, 5, 13]],
-        '4': [[1, 16, 16], [2, 0, 7]],
-        '5': [[2, 9, 17]]
+    raw_days = {
+        '1': [4, 11],
+        '2': [14, 21],
+        '3': [24, 31],
+        '4': [34, 41],
+        '5': [44, 51]
     }
+    len_1 = len(main_tables[0])
+    len_2 = len(main_tables[1])
+    len_3 = len(main_tables[2])
+
+    days = {}
+    if raw_days[day][0] < len_1 and raw_days[day][0]
     if len(days[day]) == 2:
         day_axis1 = days[day][0]
         day_axis2 = days[day][1]
@@ -222,7 +229,7 @@ def extract_data(day=str(datetime.datetime.now().date())):
 
 
 if __name__ == '__main__':
-    day = input('Введите на какой день вам нужно рассписание в виде цифры (понедельник - 1, вторник - 2, и тд.) >> ')
+    day = input('Введите на какой день вам нужно расписание в виде цифры (понедельник - 1, вторник - 2, и тд.) >> ')
     result = extract_data(day)
     pandas.set_option('display.max_columns', None)
     print(result)
