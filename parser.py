@@ -89,7 +89,7 @@ def import_csv() -> list[pandas.DataFrame]:
     if file_is_exist():
         for page in range(1, 4):
             name = str(today) + f'-page-{page}-table-1.csv'
-            table = pandas.read_csv(f'temp/{name}', names=[i for i in range(0, 36)])  # Параметр names используется
+            table = pandas.read_csv(f'temp/{name}', names=list(range(0, 36)))  # Параметр names используется
             # для названий колонок, так как pandas по умолчанию использует первую строчку cvs
             tables.append(table)  # Создание списка с таблицами для дальнейших манипуляций
 
@@ -148,7 +148,7 @@ def get_index_groups(tables: list[pandas.DataFrame]) -> int:
     table = tables[0]
     raw_groups = table.loc[1, :]
     groups = raw_groups.dropna()
-    groups.index = [i for i in range(1, len(groups) + 1)]
+    groups.index = list(range(1, len(groups) + 1))
     print('Выберите группу из предложенных: ')
     for score, i in enumerate(groups):
         print(f'{score + 1}: {i}')
@@ -168,7 +168,7 @@ def get_time(tables: list[pandas.DataFrame], day: str) -> pandas.Series:
         time = pandas.concat([time1, time2], ignore_index=True)
     elif not splited:
         time = tables[axis[0][0]][2][axis[0][1]:axis[0][2]]
-        time.index = [i for i in range(1, len(time) + 1)]
+        time.index = list(range(1, len(time) + 1))
     else:
         raise Exception('ERROR: Критическая ошибка при извлечении даты')
     return time
@@ -301,7 +301,7 @@ def extract_data(day: str = str(datetime.datetime.now().date())) -> pandas.DataF
         series = main_tables[day_axis[0]][index_group][day_axis[1]:day_axis[2]]
         cabinets = main_tables[day_axis[0]][index_group + 1][day_axis[1]:day_axis[2]]
 
-    series.index = cabinets.index = [i for i in range(1, len(series) + 1)]
+    series.index = cabinets.index = list(range(1, len(series) + 1))
     # Далее по коду используются регулярные выражения для извлечения значений.
     # Так же эти значения сразу удаляются из переменной series для более точного следующего извлечения
     teachers = series.str.findall(r'\n*\w+\s*\n?\w\.\w\.')
@@ -317,13 +317,13 @@ def extract_data(day: str = str(datetime.datetime.now().date())) -> pandas.DataF
         table = pandas.concat(objs=[time, lessons, cabinets, teachers, ids, passwords],
                               axis=1,
                               ignore_index=True)
-        table.index = [i for i in range(1, len(table) + 1)]
+        table.index = list(range(1, len(table) + 1))
         table.columns = ["time", "lessons", "cabinets", "teachers", "ids", "passwords"]
     elif not distant:
         table = pandas.concat(objs=[time, lessons, cabinets, teachers],
                               axis=1,
                               ignore_index=True)
-        table.index = [i for i in range(1, len(table) + 1)]
+        table.index = list(range(1, len(table) + 1))
         table.columns = ["time", "lessons", "cabinets", "teachers"]
 
     correct_a_table(table, distant)
