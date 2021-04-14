@@ -7,6 +7,7 @@ else:
         from camelot import read_pdf
     except ImportError:
         raise ImportError(f'Ошибка импорта функции из camelot-py. Возможно вы установили "camelot"?')
+from PyPDF2.utils import PyPdfError, PdfReadError, PdfStreamError
 import datetime
 import requests
 import os
@@ -14,6 +15,7 @@ import pandas
 import re
 import warnings
 import sys
+import zipfile
 
 warnings.filterwarnings("ignore")  # Для более красивого вывода
 
@@ -29,8 +31,7 @@ _axis_days = {  # Координаты дней, если бы листы PDF б
 def download() -> None:
     """Скачивает PDF файл с таблицами в директорию temp относительно выполнения данной функции."""
     print('INFO: Начало скачивания файла')
-    URL = "http://next.krstc.ru:8081/index.php/s/C2FEBCzoT8xECei/download?path=%2F&files=%D0%A1%D0%90%2C%20%D0%98%D0" \
-          "%A1%2C%D0%9E.pdf"  # Постоянная ссылка на скачивание pdf расписания
+    URL = "http://next.krstc.ru:8081/index.php/s/C2FEBCzoT8xECei/download?path=%2F&files=12.04-16.04.__%D0%A1%D0%90%2C%20%D0%98%D0%A1%2C%D0%9E_.pdf" # Постоянная ссылка на скачивание pdf расписания
     try:
         r = requests.get(URL)
     except Exception as e:
@@ -38,8 +39,15 @@ def download() -> None:
     print('INFO: начало записи файла')
     with open('temp/temp.pdf', mode="wb") as file:
         file.write(r.content)
+        print(f"INFO: PDF записан по пути {file.name}")
         file.close()
     print('INFO: файл успешно записан')
+
+
+def upzip_f(file_path):
+    z = zipfile.ZipFile(file_path, 'r')
+    z.extractall("temp/")
+    z.close()
 
 
 def file_is_exist() -> bool:
@@ -72,8 +80,13 @@ def _delete_the_files() -> None:
 def convert_to_csv() -> None:
     """Обрабатывает PDF файл с помощью camelot-py и переводит в CVS. Данные таблицы нежелательно использовать сразу,
     так как их корректность не идеальна. Чтобы скорректировать данные используйте функцию extract_data."""
-    print('INFO: Начата обработка PDF...')
-    pdf = camelot.read_pdf('temp/temp.pdf', pages='all')
+    print('INFO: Начата обработка PDF, это может занять несколько минут...')
+    try:
+        pdf = camelot.read_pdf('temp/temp.pdf', pages='all')
+    except Exception as e:
+        print(f"ERROR: Критическа ошибка при обработке PDF файла: '{e}'. Проверьте правильность ссылки на скачивания "
+              f"файла. Ссылка должна вести напрямую к скачиванию файла")
+        exit("ERR")
     print('INFO: Обработка PDF закончена!')
     print("INFO: Импортирование обработанного PDF...")
     name = str(datetime.datetime.now().date()) + '.csv'
@@ -164,7 +177,7 @@ def get_time(tables: list[pandas.DataFrame], day: str) -> pandas.Series:
     axis, splited = correct_axis(tables=tables, x=x1, y=x2)
     if splited:
         time1 = tables[axis[0][0]][2][axis[0][1]:axis[0][2]]
-        time2 = tables[axis[1][0]][2][axis[0][1]:axis[1][2]]
+        time2 = tables[axis[1][0]][2][axis[1][1]:axis[1][2]]
         time = pandas.concat([time1, time2], ignore_index=True)
     elif not splited:
         time = tables[axis[0][0]][2][axis[0][1]:axis[0][2]]
@@ -301,14 +314,15 @@ def extract_data(day: str = str(datetime.datetime.now().date())) -> pandas.DataF
         series = main_tables[day_axis[0]][index_group][day_axis[1]:day_axis[2]]
         cabinets = main_tables[day_axis[0]][index_group + 1][day_axis[1]:day_axis[2]]
 
-    series.index = cabinets.index = [i for i in range(1, len(series) + 1)]
+    time = get_time(main_tables, day)
+    time.index = list(range(1, len(time) + 1))
+    series.index = cabinets.index = list(range(1, len(series) + 1))
     # Далее по коду используются регулярные выражения для извлечения значений.
     # Так же эти значения сразу удаляются из переменной series для более точного следующего извлечения
     teachers = series.str.findall(r'\n*\w+\s*\n?\w\.\w\.')
     series.str.replace(r'\n*\w+\s*\n?\w\.\w\.', '')
     lessons = series.str.findall(r'^\s*[А-Я][а-я]+\s[а-я]+\s*|^\s*[А-Я][а-я]+\s*|^\s*[А-Я]+\s*')
     series.str.replace(r'^\s*[А-Я][а-я]+\s[а-я]+\s*|^\s*[А-Я][а-я]+\s*\n|^\s*[А-Я]+\s*', '')
-    time = get_time(main_tables, day)
     if distant:  # Если дистант, то еще парсится ИД и пароли и добавляются в таблицу. Иначе просто значения объединяются
         ids = series.str.findall(r"ИК\:*\s*[\d*\s*|\d*\-]*")
         series.str.replace(r"ИК\:*\s*[\d*\s*|\d*\-]*", '')
