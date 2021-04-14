@@ -4,9 +4,8 @@
 This code for russian students of Krasnogorsk College. 
 In short, this code parse the PDF file with schedule of lessons, and it is converted result in Pandas DataFrame.
 
-##RUS:
-###ВНИМАНИЕ! Разработка парсера заморожена в связи с непостоянностью структуры таблицы. Данный код рабочий на момент 21.01.2021.
-###Используемые библиотеки:
+## RUS:
+### Это отладочная версия парсера, здесь могут присутствовать баги, ошибки, и неточность расписания, по возможности используйте ветку "main" 
 * Стандартные:
     * datetime
     * os

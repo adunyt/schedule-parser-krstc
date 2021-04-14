@@ -7,7 +7,6 @@ else:
         from camelot import read_pdf
     except ImportError:
         raise ImportError(f'Ошибка импорта функции из camelot-py. Возможно вы установили "camelot"?')
-from PyPDF2.utils import PyPdfError, PdfReadError, PdfStreamError
 import datetime
 import requests
 import os
