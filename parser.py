@@ -27,20 +27,30 @@ _axis_days = {  # Координаты дней, если бы листы PDF б
 }
 
 
+def __generate_the_link():  # Экспериментальная функция. Используйте с осторожностью
+    start_day = int(datetime.date.today().day) - int(datetime.datetime.now().isoweekday()) + 1
+    end_day = int(datetime.date.today().day) + (5 - int(datetime.datetime.now().isoweekday()))
+    curr_month = int(datetime.date.today().month)
+    if curr_month < 10:
+        curr_month = "0" + str(curr_month)
+    link = f"http://next.krstc.ru:8081/index.php/s/C2FEBCzoT8xECei/download?path=%2F&files=" \
+           f"{start_day}.{curr_month}-{end_day}.{curr_month}.__%D0%A1%D0%90%2C%20%D0%98%D0%A1%2C%D0%9E_.pdf"
+    return link
+
+
 def download() -> None:
     """Скачивает PDF файл с таблицами в директорию temp относительно выполнения данной функции."""
     print('INFO: Начало скачивания файла')
-    URL = "http://next.krstc.ru:8081/index.php/s/C2FEBCzoT8xECei/download?path=%2F&files=12.04-16.04.__%D0%A1%D0%90%2C%20%D0%98%D0%A1%2C%D0%9E_.pdf" # Постоянная ссылка на скачивание pdf расписания
+    URL = __generate_the_link()
     try:
         r = requests.get(URL)
     except Exception as e:
         raise Exception(f"Невозможно установить соединение! Причина: {e}")
-    print('INFO: начало записи файла')
+    print('INFO: Начало записи файла')
     with open('temp/temp.pdf', mode="wb") as file:
         file.write(r.content)
-        print(f"INFO: PDF записан по пути {file.name}")
         file.close()
-    print('INFO: файл успешно записан')
+    print('INFO: Файл успешно записан')
 
 
 def upzip_f(file_path):
@@ -66,14 +76,14 @@ def file_is_exist() -> bool:
 
 def _delete_the_files() -> None:
     """Удаляет вчерашние CVS таблицы"""
-    print('INFO: проверка существования вчерашнего файла для удаления')
+    print('INFO: Проверка существования вчерашнего файла для удаления')
     yesterday = datetime.datetime.now().date() - datetime.timedelta(days=1)
     for page in range(1, 4):  # Так как в основном таблиц 3, то идет их проверка.
         name = str(yesterday) + f'-page-{page}-table-1.csv'
         if os.path.exists(f'temp/{name}'):
-            print(f'INFO: файл temp/{name} существует, удаление...')
+            print(f'INFO: Файл temp/{name} существует ж, удаление...')
             os.remove(f'temp/{name}')
-            print(f'INFO: файл temp/{name} успешно удален!')
+            print(f'INFO: Файл temp/{name} успешно удален!')
 
 
 def convert_to_csv() -> None:
@@ -83,7 +93,7 @@ def convert_to_csv() -> None:
     try:
         pdf = camelot.read_pdf('temp/temp.pdf', pages='all')
     except Exception as e:
-        print(f"ERROR: Критическа ошибка при обработке PDF файла: '{e}'. Проверьте правильность ссылки на скачивания "
+        print(f"ERROR: Критическая ошибка при обработке PDF файла: '{e}'. Проверьте правильность ссылки на скачивания "
               f"файла. Ссылка должна вести напрямую к скачиванию файла")
         exit("ERR")
     print('INFO: Обработка PDF закончена!')
@@ -182,7 +192,7 @@ def get_time(tables: list[pandas.DataFrame], day: str) -> pandas.Series:
         time = tables[axis[0][0]][2][axis[0][1]:axis[0][2]]
         time.index = [i for i in range(1, len(time) + 1)]
     else:
-        raise Exception('ERROR: Критическая ошибка при извлечении даты')
+        raise Exception('ERROR: Ошибка при извлечении даты')
     return time
 
 
@@ -215,7 +225,7 @@ def correct_a_table(table: pandas.DataFrame, is_distant: bool) -> None:
 
     if is_distant:
         # Удаляет лишние символы если есть ИД и пароль. В основном из ИД удаляются тире, а из пароля при нескольких
-        # учителях удаляется слеш
+        # учителях удаляется знак "/"
         for name in ('ids', 'passwords'):
             for score, item in enumerate(table[name]):
                 if isinstance(item, list) and item:
@@ -251,7 +261,7 @@ def correct_a_table(table: pandas.DataFrame, is_distant: bool) -> None:
 
     for score, lesson in enumerate(table['lessons']):
         # Экспериментальное извлечение объединенных ячеек, например учебной практики
-        # Определяет на принципе того, что если имеется единственный урок, но кабинетов несколько то это объедененная
+        # Определяет на принципе того, что если имеется единственный урок, но кабинетов несколько то это объединённая
         # После этого просто постоянно копирует значения из нижней строки все выше
         cabinet = table['cabinets'][score + 1]
         teacher = table['teachers'][score + 1]
