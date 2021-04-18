@@ -14,7 +14,6 @@ import pandas
 import re
 import warnings
 import sys
-import zipfile
 
 warnings.filterwarnings("ignore")  # Для более красивого вывода
 
@@ -27,12 +26,13 @@ _axis_days = {  # Координаты дней, если бы листы PDF б
 }
 
 
-def __generate_the_link():  # Экспериментальная функция. Используйте с осторожностью
+def __generate_the_link(friday_bug: bool = False):  # Экспериментальная функция. Используйте с осторожностью
     today = datetime.date.today().day
     weekday = datetime.datetime.now().isoweekday()
-    if weekday > 5:
+    if weekday > 5 or friday_bug:
         today = today + (7 - weekday + 1)
         weekday = 1
+
     start_day = int(today) - int(weekday) + 1
     end_day = int(today) + (5 - int(weekday))
     curr_month = int(datetime.date.today().month)
@@ -43,13 +43,12 @@ def __generate_the_link():  # Экспериментальная функция.
     return link
 
 
-def download() -> None:
+def download(url=__generate_the_link()) -> None:
     """Скачивает PDF файл с таблицами в директорию temp относительно выполнения данной функции."""
     print('INFO: Начало скачивания файла')
-    URL = __generate_the_link()
-    print(f"INFO: Ссылка: {URL}")
+    print(f"INFO: Ссылка: {url}")
     try:
-        r = requests.get(URL)
+        r = requests.get(url)
     except Exception as e:
         raise Exception(f"Невозможно установить соединение! Причина: {e}")
     print('INFO: Начало записи файла')
@@ -74,18 +73,6 @@ def file_is_exist() -> bool:
         return False
 
 
-def _delete_the_files() -> None:
-    """Удаляет вчерашние CVS таблицы"""
-    print('INFO: Проверка существования вчерашнего файла для удаления')
-    yesterday = datetime.datetime.now().date() - datetime.timedelta(days=1)
-    for page in range(1, 4):  # Так как в основном таблиц 3, то идет их проверка.
-        name = str(yesterday) + f'-page-{page}-table-1.csv'
-        if os.path.exists(f'temp/{name}'):
-            print(f'INFO: Файл temp/{name} существует ж, удаление...')
-            os.remove(f'temp/{name}')
-            print(f'INFO: Файл temp/{name} успешно удален!')
-
-
 def convert_to_csv() -> None:
     """Обрабатывает PDF файл с помощью camelot-py и переводит в CVS. Данные таблицы нежелательно использовать сразу,
     так как их корректность не идеальна. Чтобы скорректировать данные используйте функцию extract_data."""
@@ -93,16 +80,22 @@ def convert_to_csv() -> None:
     try:
         pdf = camelot.read_pdf('temp/temp.pdf', pages='all')
     except Exception as e:
-        print(f"ERROR: Критическая ошибка при обработке PDF файла: '{e}'. Проверьте правильность ссылки на скачивания "
-              f"файла. Ссылка должна вести напрямую к скачиванию файла")
-        os.remove(path="temp/temp.pdf")
-        exit("ERR")
-    print('INFO: Обработка PDF закончена!')
-    print("INFO: Импортирование обработанного PDF...")
-    name = str(datetime.datetime.now().date()) + '.csv'
-    pdf.export(path=f'temp/{name}', f='csv')
-    os.remove('temp/temp.pdf')
-    print("INFO: Импортировано!")
+        if datetime.date.today().day == 5:
+            print("WARN: Не удалось обработать расписание, попытка скачать на следующую неделю...")
+            download(url=__generate_the_link(friday_bug=True))
+            convert_to_csv()
+        else:
+            print(f"ERROR: Критическая ошибка при обработке PDF файла: '{e}'. Проверьте правильность ссылки на "
+                  f"скачивания файла. Ссылка должна вести напрямую к скачиванию файла")
+            os.remove(path="temp/temp.pdf")
+            exit("ERR")
+    else:
+        print('INFO: Обработка PDF закончена!')
+        print("INFO: Импортирование обработанного PDF...")
+        name = str(datetime.datetime.now().date()) + '.csv'
+        pdf.export(path=f'temp/{name}', f='csv')
+        os.remove('temp/temp.pdf')
+        print("INFO: Импортировано!")
 
 
 def import_csv() -> list[pandas.DataFrame]:
@@ -117,7 +110,12 @@ def import_csv() -> list[pandas.DataFrame]:
             tables.append(table)  # Создание списка с таблицами для дальнейших манипуляций
 
     elif not file_is_exist():
-        _delete_the_files()
+        for file in os.listdir('/temp/'):
+            file_path = os.path.join('/temp/', file)
+            if os.path.isfile(file_path):
+                print(f'INFO: Удаление temp/{file_path}...')
+                os.remove(file_path)
+                print(f'INFO: Файл temp/{file_path} успешно удален!')
         try:
             download()
         except Exception as e:
@@ -156,7 +154,9 @@ def correct_axis(tables: list, x: int, y: int = None) -> (list[list[int]], bool)
                 else:
                     is_split = True
                 break
-
+            else:
+                raise Exception("ERROR: Исправление координат произошло неуспешно")
+            # noinspection PyUnreachableCode
             x -= lens[no_table]
             y -= lens[no_table]
 
@@ -197,7 +197,7 @@ def get_time(tables: list[pandas.DataFrame], day: str) -> pandas.Series:
     return time
 
 
-def correct_a_table(table: pandas.DataFrame, is_distant: bool) -> None:
+def correct_a_table(table: pandas.DataFrame, distant: bool) -> None:
     """Корректирует таблицу с учетом того, что данные в основном 'съезжают' в правую колонку (кабинеты) при обработке
     с помощью camelot-py. Так как изменения вносятся сразу в переданную таблицу функция ничего не выдает в ответ"""
     for score, cabinet in enumerate(table['cabinets']):
@@ -224,7 +224,7 @@ def correct_a_table(table: pandas.DataFrame, is_distant: bool) -> None:
                 elif len(table['teachers'][score + 1]) == 0:
                     table['teachers'][score + 1] = teacher
 
-    if is_distant:
+    if distant:
         # Удаляет лишние символы если есть ИД и пароль. В основном из ИД удаляются тире, а из пароля при нескольких
         # учителях удаляется знак "/"
         for name in ('ids', 'passwords'):
@@ -265,14 +265,15 @@ def correct_a_table(table: pandas.DataFrame, is_distant: bool) -> None:
         # После этого просто постоянно копирует значения из нижней строки все выше
         cabinet = table['cabinets'][score + 1]
         teacher = table['teachers'][score + 1]
-        if is_distant:
+        zoom_id = password = past_lesson = past_teacher = past_id = past_password = None  # Нужно для избежания ошибок
+        if distant:
             zoom_id = table['ids'][score + 1]
             password = table['passwords'][score + 1]
 
         if not pandas.isnull(lesson):
             past_lesson = lesson
             past_teacher = teacher
-            if is_distant:
+            if distant:
                 past_id = zoom_id
                 past_password = password
 
@@ -280,7 +281,7 @@ def correct_a_table(table: pandas.DataFrame, is_distant: bool) -> None:
             if pandas.notnull(cabinet):
                 table['lessons'][score + 1] = past_lesson
                 table['teachers'][score + 1] = past_teacher
-                if is_distant:
+                if distant:
                     table['ids'][score + 1] = past_id
                     table['passwords'][score + 1] = past_password
 
@@ -297,14 +298,14 @@ def is_distant(raw_tables: list, day: str, group_index: int) -> bool:
         return False
 
 
-def extract_data(main_tables: list, day: str = str(datetime.datetime.now().date())) -> pandas.DataFrame:
+def extract_data(main_tables: list, today: str = str(datetime.datetime.now().date())) -> pandas.DataFrame:
     """Обрабатывает информацию из CSV файлов и выдает pandas.DataFrame с расписанием.
     Колонки: время, название предмета, кабинет, учитель, если есть дистант, то еще и ИД и пароль"""
     index_group = get_index_groups(tables=main_tables)
-    x1 = _axis_days[day][0]
-    x2 = _axis_days[day][1]
+    x1 = _axis_days[today][0]
+    x2 = _axis_days[today][1]
     axis, splited = correct_axis(tables=main_tables, x=x1, y=x2)
-    distant = is_distant(main_tables, day, index_group)
+    distant = is_distant(main_tables, today, index_group)
     if splited:  # Выборка по ячейкам в pandas.DataFrame (импортированном из CVS, см. import_csv())
         day_axis1 = axis[0]
         day_axis2 = axis[1]
@@ -322,20 +323,24 @@ def extract_data(main_tables: list, day: str = str(datetime.datetime.now().date(
         series = main_tables[day_axis[0]][index_group][day_axis[1]:day_axis[2]]
         cabinets = main_tables[day_axis[0]][index_group + 1][day_axis[1]:day_axis[2]]
 
-    time = get_time(main_tables, day)
+    time = get_time(main_tables, today)
     time.index = list(range(1, len(time) + 1))
     series.index = cabinets.index = list(range(1, len(series) + 1))
     # Далее по коду используются регулярные выражения для извлечения значений.
     # Так же эти значения сразу удаляются из переменной series для более точного следующего извлечения
-    teachers = series.str.findall(r'\n*\w+\s*\n?\w\.\w\.')
-    series.str.replace(r'\n*\w+\s*\n?\w\.\w\.', '')
-    lessons = series.str.findall(r'^\s*[А-Я][а-я]+\s[а-я]+\s*|^\s*[А-Я][а-я]+\s*|^\s*[А-Я]+\s*')
-    series.str.replace(r'^\s*[А-Я][а-я]+\s[а-я]+\s*|^\s*[А-Я][а-я]+\s*\n|^\s*[А-Я]+\s*', '')
+    teacher_re = r'\n*\w+\s*\n?\w\.\w\.'
+    lesson_re = r'^\s*[А-Я][а-я]+\s[а-я]+\s*|^\s*[А-Я][а-я]+\s*|^\s*[А-Я]+\s*'
+    id_re = r"ИК\:*\s*[\d*\s*|\d*\-]*"
+    pass_re = r'Пароль\n?.+|Код\n?.+'
+    teachers = series.str.findall(teacher_re)
+    series.str.replace(teacher_re, '')
+    lessons = series.str.findall(lesson_re)
+    series.str.replace(lesson_re, '')
     if distant:  # Если дистант, то еще парсится ИД и пароли и добавляются в таблицу. Иначе просто значения объединяются
-        ids = series.str.findall(r"ИК\:*\s*[\d*\s*|\d*\-]*")
-        series.str.replace(r"ИК\:*\s*[\d*\s*|\d*\-]*", '')
-        passwords = series.str.findall(r'Пароль\n?.+|Код\n?.+')
-        series.str.replace(r'Пароль\n?.+|Код\n?.+', '')
+        ids = series.str.findall(id_re)
+        series.str.replace(id_re, '')
+        passwords = series.str.findall(pass_re)
+        series.str.replace(pass_re, '')
         table = pandas.concat(objs=[time, lessons, cabinets, teachers, ids, passwords],
                               axis=1,
                               ignore_index=True)
@@ -356,6 +361,6 @@ def extract_data(main_tables: list, day: str = str(datetime.datetime.now().date(
 
 if __name__ == '__main__':
     day = input('Введите на какой день вам нужно расписание в виде цифры (понедельник - 1, вторник - 2, и тд.) >> ')
-    result = extract_data(main_tables=import_csv(), day=day)
+    result = extract_data(main_tables=import_csv(), today=day)
     pandas.set_option('display.max_columns', None)
     print(result)
