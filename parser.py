@@ -28,8 +28,13 @@ _axis_days = {  # Координаты дней, если бы листы PDF б
 
 
 def __generate_the_link():  # Экспериментальная функция. Используйте с осторожностью
-    start_day = int(datetime.date.today().day) - int(datetime.datetime.now().isoweekday()) + 1
-    end_day = int(datetime.date.today().day) + (5 - int(datetime.datetime.now().isoweekday()))
+    today = datetime.date.today().day
+    weekday = datetime.datetime.now().isoweekday()
+    if weekday > 5:
+        today = today + (7 - weekday + 1)
+        weekday = 1
+    start_day = int(today) - int(weekday) + 1
+    end_day = int(today) + (5 - int(weekday))
     curr_month = int(datetime.date.today().month)
     if curr_month < 10:
         curr_month = "0" + str(curr_month)
@@ -42,6 +47,7 @@ def download() -> None:
     """Скачивает PDF файл с таблицами в директорию temp относительно выполнения данной функции."""
     print('INFO: Начало скачивания файла')
     URL = __generate_the_link()
+    print(f"INFO: Ссылка: {URL}")
     try:
         r = requests.get(URL)
     except Exception as e:
@@ -51,12 +57,6 @@ def download() -> None:
         file.write(r.content)
         file.close()
     print('INFO: Файл успешно записан')
-
-
-def upzip_f(file_path):
-    z = zipfile.ZipFile(file_path, 'r')
-    z.extractall("temp/")
-    z.close()
 
 
 def file_is_exist() -> bool:
@@ -95,6 +95,7 @@ def convert_to_csv() -> None:
     except Exception as e:
         print(f"ERROR: Критическая ошибка при обработке PDF файла: '{e}'. Проверьте правильность ссылки на скачивания "
               f"файла. Ссылка должна вести напрямую к скачиванию файла")
+        os.remove(path="temp/temp.pdf")
         exit("ERR")
     print('INFO: Обработка PDF закончена!')
     print("INFO: Импортирование обработанного PDF...")
@@ -105,7 +106,7 @@ def convert_to_csv() -> None:
 
 
 def import_csv() -> list[pandas.DataFrame]:
-    """Импортирует CSV файлы с таблицами в pandas. Возвращает список с таблицами в виде Pandas.DataFrame"""
+    """Импортирует CSV файлы с таблицами в pandas. Возвращает список содержащий несколько Pandas.DataFrame"""
     today = datetime.datetime.now().date()
     tables = []
     if file_is_exist():
@@ -247,17 +248,16 @@ def correct_a_table(table: pandas.DataFrame, is_distant: bool) -> None:
         # Удаляет лишние пробелы и переносы строк из названий урока и имен учителей
         for score, item in enumerate(table[name]):
             if isinstance(item, list) and item:
-                for i in range(0, len(item)):  # Данная i не используется в цикле
-                    if len(item) == 1:
-                        item[0] = re.sub(r'\s{2,}', '', item[0])
-                        table[name][score + 1] = re.sub('\\n', '', item[0])
-                    elif len(item) == 2:
-                        for name_item in item:
-                            corrected_item = re.sub('\n', '', name_item)
-                            corrected_item = re.sub(r'\s{2,}', '', corrected_item)
-                            table[name][score + 1].remove(name_item)
-                            table[name][score + 1].append(corrected_item)
-                            table[name][score + 1].reverse()
+                if len(item) == 1:
+                    item[0] = re.sub(r'\s{2,}', '', item[0])
+                    table[name][score + 1] = re.sub('\\n', '', item[0])
+                elif len(item) == 2:
+                    for name_item in item:
+                        corrected_item = re.sub('\n', '', name_item)
+                        corrected_item = re.sub(r'\s{2,}', '', corrected_item)
+                        table[name][score + 1].remove(name_item)
+                        table[name][score + 1].append(corrected_item)
+                        table[name][score + 1].reverse()
 
     for score, lesson in enumerate(table['lessons']):
         # Экспериментальное извлечение объединенных ячеек, например учебной практики
@@ -297,10 +297,9 @@ def is_distant(raw_tables: list, day: str, group_index: int) -> bool:
         return False
 
 
-def extract_data(day: str = str(datetime.datetime.now().date())) -> pandas.DataFrame:
+def extract_data(main_tables: list, day: str = str(datetime.datetime.now().date())) -> pandas.DataFrame:
     """Обрабатывает информацию из CSV файлов и выдает pandas.DataFrame с расписанием.
     Колонки: время, название предмета, кабинет, учитель, если есть дистант, то еще и ИД и пароль"""
-    main_tables = import_csv()
     index_group = get_index_groups(tables=main_tables)
     x1 = _axis_days[day][0]
     x2 = _axis_days[day][1]
@@ -348,6 +347,8 @@ def extract_data(day: str = str(datetime.datetime.now().date())) -> pandas.DataF
                               ignore_index=True)
         table.index = [i for i in range(1, len(table) + 1)]
         table.columns = ["time", "lessons", "cabinets", "teachers"]
+    else:
+        raise Exception("ERROR: Невозможно определить дистанционное обучение или нет")
 
     correct_a_table(table, distant)
     return table
@@ -355,6 +356,6 @@ def extract_data(day: str = str(datetime.datetime.now().date())) -> pandas.DataF
 
 if __name__ == '__main__':
     day = input('Введите на какой день вам нужно расписание в виде цифры (понедельник - 1, вторник - 2, и тд.) >> ')
-    result = extract_data(day=day)
+    result = extract_data(main_tables=import_csv(), day=day)
     pandas.set_option('display.max_columns', None)
     print(result)
